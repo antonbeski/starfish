@@ -7,7 +7,7 @@ import { StockSummary } from "@/components/StockSummary";
 import { RateLimitDisplay } from "@/components/RateLimitDisplay";
 import { fetchStockHistory, fetchStockDetails, StockDataPoint, StockDetails } from "@/lib/stock-api";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Activity } from "lucide-react";
+import { Star } from "lucide-react";
 
 export default function HomePage() {
   const [symbol, setSymbol] = useState<string>("AAPL");
@@ -45,7 +45,7 @@ export default function HomePage() {
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b">
         <div className="flex items-center gap-3">
           <div className="bg-accent p-2.5 rounded-xl shadow-sm">
-            <Activity className="w-8 h-8 text-white" />
+            <Star className="w-8 h-8 text-white fill-white" />
           </div>
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-accent">STARFISH</h1>
