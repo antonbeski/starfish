@@ -26,30 +26,30 @@ export function StockChart({ data, symbol }: StockChartProps) {
   const [chartType, setChartType] = useState<"price" | "technical">("price");
 
   return (
-    <Card className="w-full">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-7">
-        <CardTitle className="text-xl font-bold tracking-tight">Market Analysis: {symbol}</CardTitle>
-        <Tabs value={chartType} onValueChange={(v) => setChartType(v as any)}>
-          <TabsList>
+    <Card className="w-full border-none shadow-none">
+      <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between space-y-4 sm:space-y-0 pb-7 px-4 md:px-6">
+        <CardTitle className="text-lg md:text-xl font-bold tracking-tight">Market Analysis: {symbol}</CardTitle>
+        <Tabs value={chartType} onValueChange={(v) => setChartType(v as any)} className="w-full sm:w-auto">
+          <TabsList className="grid grid-cols-2 w-full sm:w-auto">
             <TabsTrigger value="price">Price Action</TabsTrigger>
             <TabsTrigger value="technical">Indicators</TabsTrigger>
           </TabsList>
         </Tabs>
       </CardHeader>
-      <CardContent>
-        <div className="h-[400px] w-full">
+      <CardContent className="px-2 md:px-6">
+        <div className="h-[300px] md:h-[400px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={data}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted))" />
               <XAxis 
                 dataKey="date" 
-                fontSize={12} 
+                fontSize={10} 
                 tickLine={false} 
                 axisLine={false} 
                 minTickGap={30}
               />
               <YAxis 
-                fontSize={12} 
+                fontSize={10} 
                 tickLine={false} 
                 axisLine={false} 
                 domain={['auto', 'auto']}
@@ -62,7 +62,7 @@ export function StockChart({ data, symbol }: StockChartProps) {
                   borderRadius: 'var(--radius)' 
                 }}
               />
-              <Legend verticalAlign="top" height={36}/>
+              <Legend verticalAlign="top" height={36} iconType="circle" />
               
               <Area 
                 type="monotone" 
@@ -117,12 +117,12 @@ export function StockChart({ data, symbol }: StockChartProps) {
         </div>
         
         {chartType === "technical" && (
-           <div className="h-[150px] w-full mt-8 border-t pt-4">
+           <div className="h-[120px] md:h-[150px] w-full mt-4 md:mt-8 border-t pt-4">
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={data}>
                   <XAxis dataKey="date" hide />
-                  <YAxis fontSize={10} domain={[0, 100]} orientation="right" />
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <YAxis fontSize={10} domain={[0, 100]} orientation="right" tickLine={false} axisLine={false} />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted))" />
                   <ReChartsTooltip />
                   <Line 
                     type="monotone" 
@@ -130,8 +130,8 @@ export function StockChart({ data, symbol }: StockChartProps) {
                     stroke="hsl(var(--destructive))" 
                     dot={false} 
                     name="RSI (14)"
+                    strokeWidth={1.5}
                   />
-                  {/* Reference lines for RSI */}
                   <Line dataKey="rsi" stroke="none" /> 
                 </ComposedChart>
               </ResponsiveContainer>
