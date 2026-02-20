@@ -1,0 +1,10 @@
+{
+  "placeholderImages": [
+    {
+      "id": "stock-hero",
+      "description": "Abstract stock market data visualization",
+      "imageUrl": "https://picsum.photos/seed/stock1/1200/800",
+      "imageHint": "stock market data"
+    }
+  ]
+}
