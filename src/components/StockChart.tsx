@@ -27,15 +27,25 @@ export function StockChart({ data, symbol }: StockChartProps) {
 
   return (
     <Card className="w-full border-none shadow-none rounded-none">
-      <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between space-y-4 md:space-y-0 pb-6 md:pb-8 px-5 md:px-8 border-b">
+      <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between space-y-6 md:space-y-0 pb-6 md:pb-8 px-5 md:px-8 border-b">
         <div>
-          <CardTitle className="text-lg md:text-2xl font-black tracking-tight uppercase">Price Matrix: {symbol}</CardTitle>
+          <CardTitle className="text-lg md:text-2xl font-black tracking-tight uppercase italic">Price Matrix: {symbol}</CardTitle>
           <p className="text-[9px] md:text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-1">90-Day Rolling Analysis</p>
         </div>
         <Tabs value={chartType} onValueChange={(v) => setChartType(v as any)} className="w-full md:w-auto">
-          <TabsList className="grid grid-cols-2 w-full md:w-64 bg-secondary border border-primary/20">
-            <TabsTrigger value="price" className="data-[state=active]:bg-primary data-[state=active]:text-white uppercase font-black text-[9px] md:text-[10px] tracking-widest h-8 md:h-10">Price Action</TabsTrigger>
-            <TabsTrigger value="technical" className="data-[state=active]:bg-primary data-[state=active]:text-white uppercase font-black text-[9px] md:text-[10px] tracking-widest h-8 md:h-10">Indicators</TabsTrigger>
+          <TabsList className="grid grid-cols-2 w-full md:w-72 bg-white border-2 border-primary rounded-none p-0 h-auto overflow-hidden shadow-[4px_4px_0px_black]">
+            <TabsTrigger 
+              value="price" 
+              className="data-[state=active]:bg-primary data-[state=active]:text-white rounded-none uppercase font-black text-[9px] md:text-[10px] tracking-widest py-3 transition-all"
+            >
+              Price Action
+            </TabsTrigger>
+            <TabsTrigger 
+              value="technical" 
+              className="data-[state=active]:bg-primary data-[state=active]:text-white rounded-none uppercase font-black text-[9px] md:text-[10px] tracking-widest py-3 transition-all border-l-2 border-primary"
+            >
+              Indicators
+            </TabsTrigger>
           </TabsList>
         </Tabs>
       </CardHeader>
