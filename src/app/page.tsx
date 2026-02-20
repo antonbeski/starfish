@@ -141,17 +141,26 @@ export default function HomePage() {
       </main>
 
       {/* Footer / Disclaimer */}
-      <footer className="pt-16 pb-12 border-t-2 border-primary text-center space-y-4">
-        <div className="flex justify-center gap-6 text-primary mb-4">
+      <footer className="pt-16 pb-12 border-t-2 border-primary text-center space-y-8">
+        <div className="flex justify-center gap-6 text-primary">
             <Star className="w-5 h-5" />
         </div>
-        <p className="text-[10px] md:text-xs text-muted-foreground font-bold uppercase tracking-widest">
-          © 2026 STARFISH Global Analytics Terminal. All rights reserved.
-        </p>
-        <p className="text-[9px] md:text-[11px] text-muted-foreground max-w-2xl mx-auto opacity-60 px-4">
-          Data is provided "as is" and solely for informational purposes, not for trading purposes or advice. 
-          Market data may be delayed. STARFISH does not verify any data and disclaims any obligation to do so.
-        </p>
+        
+        <div className="py-4 md:py-8">
+          <h2 className="text-4xl md:text-8xl font-black tracking-tighter text-primary" style={{ fontFamily: "'Archivo Black', sans-serif" }}>
+            ANTON BESKI.M
+          </h2>
+        </div>
+
+        <div className="space-y-4">
+          <p className="text-[10px] md:text-xs text-muted-foreground font-bold uppercase tracking-widest">
+            © 2026 STARFISH Global Analytics Terminal. All rights reserved.
+          </p>
+          <p className="text-[9px] md:text-[11px] text-muted-foreground max-w-2xl mx-auto opacity-60 px-4">
+            Data is provided "as is" and solely for informational purposes, not for trading purposes or advice. 
+            Market data may be delayed. STARFISH does not verify any data and disclaims any obligation to do so.
+          </p>
+        </div>
       </footer>
     </div>
   );
