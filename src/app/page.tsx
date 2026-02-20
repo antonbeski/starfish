@@ -51,7 +51,6 @@ export default function HomePage() {
           <div>
             <h1 className="text-3xl md:text-4xl font-black tracking-tighter text-primary">STARFISH</h1>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] md:text-xs text-muted-foreground font-bold uppercase tracking-[0.2em]">Data Terminal v2.0</span>
               <Badge variant="outline" className="text-[10px] border-primary px-1.5 py-0">LIVE</Badge>
             </div>
           </div>
