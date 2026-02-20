@@ -5,6 +5,7 @@ import { StockSearch } from "@/components/StockSearch";
 import { StockChart } from "@/components/StockChart";
 import { StockSummary } from "@/components/StockSummary";
 import { RateLimitDisplay } from "@/components/RateLimitDisplay";
+import { AiAnalysis } from "@/components/AiAnalysis";
 import { fetchStockHistory, fetchStockDetails, StockDataPoint, StockDetails } from "@/lib/stock-api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Star, ShieldCheck, Activity } from "lucide-react";
@@ -85,6 +86,13 @@ export default function HomePage() {
             <StockChart data={history} symbol={symbol} />
           )}
         </div>
+
+        {/* AI Analysis Integration */}
+        {details && !loading && (
+          <section className="animate-in fade-in slide-in-from-bottom-4 duration-1000">
+            <AiAnalysis details={details} history={history} />
+          </section>
+        )}
 
         {/* Technical Analysis & Market Status */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8">
