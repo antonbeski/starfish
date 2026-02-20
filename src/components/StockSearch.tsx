@@ -21,13 +21,13 @@ export function StockSearch({ onSearch, isLoading }: StockSearchProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row w-full gap-3">
+    <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row w-full gap-2 md:gap-3">
       <div className="relative flex-1">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-primary opacity-50" />
+        <Search className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-primary opacity-50" />
         <Input
           type="text"
-          placeholder="Enter Ticker (e.g. AAPL, TSLA, NVDA)"
-          className="pl-11 h-12 bg-white border-2 border-primary text-primary font-bold placeholder:text-muted-foreground/50 rounded-md focus-visible:ring-offset-0 focus-visible:ring-1"
+          placeholder="Ticker (e.g. AAPL, TSLA)"
+          className="pl-10 md:pl-11 h-10 md:h-12 bg-white border-2 border-primary text-primary font-bold placeholder:text-muted-foreground/50 rounded-md focus-visible:ring-offset-0 focus-visible:ring-1 text-sm md:text-base"
           value={symbol}
           onChange={(e) => setSymbol(e.target.value)}
           disabled={isLoading}
@@ -36,9 +36,9 @@ export function StockSearch({ onSearch, isLoading }: StockSearchProps) {
       <Button 
         type="submit" 
         disabled={isLoading} 
-        className="h-12 px-8 bg-primary hover:bg-primary/90 text-white font-black uppercase tracking-tighter rounded-md transition-all active:scale-95"
+        className="h-10 md:h-12 px-6 md:px-8 bg-primary hover:bg-primary/90 text-white font-black uppercase tracking-tighter rounded-md transition-all active:scale-95 text-xs md:text-sm"
       >
-        {isLoading ? "Analyzing..." : "Analyze"}
+        {isLoading ? "Analysing..." : "Analyse"}
       </Button>
     </form>
   );
