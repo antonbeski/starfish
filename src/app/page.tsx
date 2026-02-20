@@ -146,7 +146,7 @@ export default function HomePage() {
             <Star className="w-5 h-5" />
         </div>
         <p className="text-[10px] md:text-xs text-muted-foreground font-bold uppercase tracking-widest">
-          © 2024 STARFISH Global Analytics Terminal. All rights reserved.
+          © 2026 STARFISH Global Analytics Terminal. All rights reserved.
         </p>
         <p className="text-[9px] md:text-[11px] text-muted-foreground max-w-2xl mx-auto opacity-60 px-4">
           Data is provided "as is" and solely for informational purposes, not for trading purposes or advice. 
