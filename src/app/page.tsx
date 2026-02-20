@@ -148,7 +148,7 @@ export default function HomePage() {
         
         <div className="py-4 md:py-8">
           <h2 className="text-4xl md:text-8xl font-black tracking-tighter text-primary" style={{ fontFamily: "'Archivo Black', sans-serif" }}>
-            ANTON BESKI.M
+            ANTON BESKI
           </h2>
         </div>
 
