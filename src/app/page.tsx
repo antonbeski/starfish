@@ -57,7 +57,7 @@ export default function HomePage() {
           <div>
             <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-primary">STARFISH</h1>
             <div className="flex items-center gap-2">
-              <Badge variant="outline" className="text-[9px] md:text-[10px] border-primary px-1.5 py-0 font-bold uppercase tracking-widest">Alpaca Engine</Badge>
+              <Badge variant="outline" className="text-[9px] md:text-[10px] border-primary px-1.5 py-0 font-bold uppercase tracking-widest">Finnhub Core</Badge>
             </div>
           </div>
         </div>
@@ -72,7 +72,7 @@ export default function HomePage() {
           <AlertCircle className="h-4 w-4" />
           <AlertTitle className="font-black uppercase tracking-widest text-xs">Terminal Alert</AlertTitle>
           <AlertDescription className="text-sm font-medium">
-            {error}. Please verify your symbols or check API status.
+            {error}. Please verify your FINNHUB_API_KEY or symbol.
           </AlertDescription>
         </Alert>
       )}
@@ -163,10 +163,10 @@ export default function HomePage() {
         </div>
         <div className="space-y-3 md:space-y-4 px-4">
           <p className="text-[9px] md:text-xs text-muted-foreground font-bold uppercase tracking-widest">
-            © 2026 STARFISH Global Analytics Terminal. Powered by Alpaca Markets.
+            © 2026 STARFISH Global Analytics Terminal. Powered by Finnhub.io.
           </p>
           <p className="text-[8px] md:text-[11px] text-muted-foreground max-w-2xl mx-auto opacity-60">
-            Data provided by Alpaca Securities LLC. Historical performance does not guarantee future results. 
+            Data provided by Finnhub Stock API. Historical performance does not guarantee future results. 
             AI analysis is experimental and for informational purposes only.
           </p>
         </div>
