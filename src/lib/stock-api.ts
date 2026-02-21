@@ -1,7 +1,6 @@
-
 'use server';
 
-import yahooFinance from 'yahoo-finance2';
+import { quote, chart } from 'yahoo-finance2';
 import { calculateSMA, calculateEMA, calculateRSI } from './stock-utils';
 
 export interface StockDataPoint {
@@ -65,7 +64,7 @@ function formatMarketCap(val?: number): string {
 export async function fetchStockHistory(symbol: string): Promise<ApiResponse<StockDataPoint[]>> {
   try {
     const queryOptions = { period1: '3mo', interval: '1d' as any };
-    const result = await yahooFinance.chart(symbol, queryOptions);
+    const result = await chart(symbol, queryOptions);
     
     if (!result || !result.quotes) {
       throw new Error('No historical data found');
@@ -106,7 +105,7 @@ export async function fetchStockHistory(symbol: string): Promise<ApiResponse<Sto
 
 export async function fetchStockDetails(symbol: string): Promise<ApiResponse<StockDetails>> {
   try {
-    const result = await yahooFinance.quote(symbol);
+    const result = await quote(symbol);
     
     if (!result) {
       throw new Error('No stock details found');
