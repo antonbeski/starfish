@@ -1,6 +1,5 @@
 'use server';
 
-import yahooFinance from 'yahoo-finance2';
 import { calculateSMA, calculateEMA, calculateRSI } from './stock-utils';
 
 export interface StockDataPoint {
@@ -62,58 +61,41 @@ function formatMarketCap(val?: number): string {
 }
 
 /**
- * Fetches historical data with a fallback to direct internal Yahoo API
+ * Fetches historical data using direct Yahoo API for maximum reliability
  */
 export async function fetchStockHistory(symbol: string): Promise<ApiResponse<StockDataPoint[]>> {
   try {
-    const queryOptions = { period1: '3mo', interval: '1d' as any };
-    
-    // Ensure we are using the default export correctly for the server environment
-    const yf = (yahooFinance as any).default || yahooFinance;
-    let result;
-    
-    try {
-      result = await yf.chart(symbol, queryOptions);
-    } catch (e) {
-      console.warn(`YahooFinance2 package failed for ${symbol}, trying direct API fallback...`);
-      // Direct API Fallback for chart data
-      const response = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=3mo&interval=1d`);
-      if (response.ok) {
-        const json = await response.json();
-        const chart = json.chart.result[0];
-        const timestamps = chart.timestamp;
-        const indicators = chart.indicators.quote[0];
-        
-        result = {
-          quotes: timestamps.map((ts: number, i: number) => ({
-            date: new Date(ts * 1000),
-            open: indicators.open[i],
-            high: indicators.high[i],
-            low: indicators.low[i],
-            close: indicators.close[i],
-            volume: indicators.volume[i],
-          }))
-        };
-      } else {
-        throw new Error('Direct Yahoo API fallback failed');
-      }
-    }
-    
-    if (!result || !result.quotes) {
-      throw new Error('No historical data found');
+    // Direct API call to Yahoo Finance Chart v8
+    const response = await fetch(
+      `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=3mo&interval=1d`,
+      { cache: 'no-store' }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Yahoo API error: ${response.statusText}`);
     }
 
-    const data: StockDataPoint[] = result.quotes
-      .filter((q: any) => q.date && q.close !== null)
-      .map((q: any) => ({
-        date: new Date(q.date).toISOString().split('T')[0],
-        open: q.open ?? 0,
-        high: q.high ?? 0,
-        low: q.low ?? 0,
-        close: q.close ?? 0,
-        volume: q.volume ?? 0,
-      }));
+    const json = await response.json();
+    const result = json.chart?.result?.[0];
 
+    if (!result || !result.timestamp) {
+      throw new Error('No historical data found for this symbol');
+    }
+
+    const timestamps = result.timestamp;
+    const indicators = result.indicators.quote[0];
+    const adjClose = result.indicators.adjclose?.[0]?.adjclose || indicators.close;
+
+    const data: StockDataPoint[] = timestamps.map((ts: number, i: number) => ({
+      date: new Date(ts * 1000).toISOString().split('T')[0],
+      open: indicators.open[i] ?? 0,
+      high: indicators.high[i] ?? 0,
+      low: indicators.low[i] ?? 0,
+      close: adjClose[i] ?? indicators.close[i] ?? 0,
+      volume: indicators.volume[i] ?? 0,
+    })).filter((d: any) => d.close > 0);
+
+    // Calculate Technical Indicators
     const closes = data.map(d => d.close);
     const sma20 = calculateSMA(closes, 20);
     const ema50 = calculateEMA(closes, 50);
@@ -131,7 +113,7 @@ export async function fetchStockHistory(symbol: string): Promise<ApiResponse<Sto
       rateLimit: getRateLimit(),
     };
   } catch (error) {
-    console.error(`Error fetching history for ${symbol}:`, error);
+    console.error(`Terminal Error [History] for ${symbol}:`, error);
     return {
       data: [],
       rateLimit: getRateLimit(),
@@ -140,36 +122,34 @@ export async function fetchStockHistory(symbol: string): Promise<ApiResponse<Sto
 }
 
 /**
- * Fetches stock details using Open API with fallback to Yahoo
+ * Fetches stock details using a combination of Open API and direct Yahoo Quotes
  */
 export async function fetchStockDetails(symbol: string): Promise<ApiResponse<StockDetails>> {
   try {
-    // Attempt Open API first for real-time prices
-    const response = await fetch(`https://military-jobye-haiqstudios-14f59639.koyeb.app/stock?symbol=${symbol}&res=num`, {
+    // 1. Primary Source: Koyeb Open API for Live Price
+    const liveRes = await fetch(`https://military-jobye-haiqstudios-14f59639.koyeb.app/stock?symbol=${symbol}&res=num`, {
       cache: 'no-store'
     });
     
     let liveData = { price: 0, change: 0, percentChange: 0 };
-    if (response.ok) {
-      liveData = await response.json();
+    if (liveRes.ok) {
+      liveData = await liveRes.json();
     }
     
-    const yf = (yahooFinance as any).default || yahooFinance;
-    let yfResult;
-    
-    try {
-      yfResult = await yf.quote(symbol);
-    } catch (e) {
-      // Direct API Fallback for quote data if library fails
-      const yfRes = await fetch(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbol}`);
-      if (yfRes.ok) {
-        const json = await yfRes.json();
-        yfResult = json.quoteResponse.result[0];
-      }
+    // 2. Secondary Source: Direct Yahoo Quote API for Fundamentals
+    const quoteRes = await fetch(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbol}`, {
+      cache: 'no-store'
+    });
+
+    if (!quoteRes.ok) {
+      throw new Error('Failed to reach Yahoo Quote endpoint');
     }
-    
+
+    const quoteJson = await quoteRes.json();
+    const yfResult = quoteJson.quoteResponse?.result?.[0];
+
     if (!yfResult) {
-      throw new Error('Failed to fetch stock details from any source');
+      throw new Error('No details found for this symbol');
     }
     
     return {
@@ -189,7 +169,7 @@ export async function fetchStockDetails(symbol: string): Promise<ApiResponse<Sto
       rateLimit: getRateLimit(),
     };
   } catch (error) {
-    console.error(`Error fetching details for ${symbol}:`, error);
+    console.error(`Terminal Error [Details] for ${symbol}:`, error);
     throw error;
   }
 }

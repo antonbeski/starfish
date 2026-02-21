@@ -8,7 +8,7 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  serverExternalPackages: ['yahoo-finance2'],
+  // Removed yahoo-finance2 from external packages as we are using direct fetch for stability
   images: {
     remotePatterns: [
       {
