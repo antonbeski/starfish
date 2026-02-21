@@ -61,13 +61,43 @@ function formatMarketCap(val?: number): string {
   return val.toString();
 }
 
+/**
+ * Fetches historical data with a fallback to direct internal Yahoo API
+ */
 export async function fetchStockHistory(symbol: string): Promise<ApiResponse<StockDataPoint[]>> {
   try {
     const queryOptions = { period1: '3mo', interval: '1d' as any };
     
     // Ensure we are using the default export correctly for the server environment
     const yf = (yahooFinance as any).default || yahooFinance;
-    const result = await yf.chart(symbol, queryOptions);
+    let result;
+    
+    try {
+      result = await yf.chart(symbol, queryOptions);
+    } catch (e) {
+      console.warn(`YahooFinance2 package failed for ${symbol}, trying direct API fallback...`);
+      // Direct API Fallback for chart data
+      const response = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=3mo&interval=1d`);
+      if (response.ok) {
+        const json = await response.json();
+        const chart = json.chart.result[0];
+        const timestamps = chart.timestamp;
+        const indicators = chart.indicators.quote[0];
+        
+        result = {
+          quotes: timestamps.map((ts: number, i: number) => ({
+            date: new Date(ts * 1000),
+            open: indicators.open[i],
+            high: indicators.high[i],
+            low: indicators.low[i],
+            close: indicators.close[i],
+            volume: indicators.volume[i],
+          }))
+        };
+      } else {
+        throw new Error('Direct Yahoo API fallback failed');
+      }
+    }
     
     if (!result || !result.quotes) {
       throw new Error('No historical data found');
@@ -102,7 +132,6 @@ export async function fetchStockHistory(symbol: string): Promise<ApiResponse<Sto
     };
   } catch (error) {
     console.error(`Error fetching history for ${symbol}:`, error);
-    // Fallback if Yahoo fails
     return {
       data: [],
       rateLimit: getRateLimit(),
@@ -110,85 +139,57 @@ export async function fetchStockHistory(symbol: string): Promise<ApiResponse<Sto
   }
 }
 
+/**
+ * Fetches stock details using Open API with fallback to Yahoo
+ */
 export async function fetchStockDetails(symbol: string): Promise<ApiResponse<StockDetails>> {
   try {
-    // Attempt to use the provided Free Open API for live data
-    // This API is specifically mentioned as being good for live current prices
+    // Attempt Open API first for real-time prices
     const response = await fetch(`https://military-jobye-haiqstudios-14f59639.koyeb.app/stock?symbol=${symbol}&res=num`, {
       cache: 'no-store'
     });
     
+    let liveData = { price: 0, change: 0, percentChange: 0 };
     if (response.ok) {
-      const liveData = await response.json();
-      
-      // If the open API succeeds, we still might need extra info (like 52w range) 
-      // which we can attempt to get from Yahoo as a secondary source.
-      try {
-        const yf = (yahooFinance as any).default || yahooFinance;
-        const yfResult = await yf.quote(symbol);
-        
-        return {
-          data: {
-            symbol: symbol,
-            name: yfResult.longName || yfResult.shortName || symbol,
-            price: liveData.price || yfResult.regularMarketPrice || 0,
-            change: liveData.change || yfResult.regularMarketChange || 0,
-            changePercent: liveData.percentChange || yfResult.regularMarketChangePercent || 0,
-            peRatio: yfResult.trailingPE ?? 0,
-            eps: yfResult.trailingEps ?? 0,
-            dividendYield: yfResult.dividendYield ?? 0,
-            marketCap: formatMarketCap(yfResult.marketCap),
-            fiftyTwoWeekHigh: yfResult.fiftyTwoWeekHigh ?? 0,
-            fiftyTwoWeekLow: yfResult.fiftyTwoWeekLow ?? 0,
-          },
-          rateLimit: getRateLimit(),
-        };
-      } catch (yfError) {
-        // If Yahoo fails, return what we got from the Open API
-        return {
-          data: {
-            symbol: symbol,
-            name: symbol,
-            price: liveData.price || 0,
-            change: liveData.change || 0,
-            changePercent: liveData.percentChange || 0,
-            peRatio: 0,
-            eps: 0,
-            dividendYield: 0,
-            marketCap: 'N/A',
-            fiftyTwoWeekHigh: 0,
-            fiftyTwoWeekLow: 0,
-          },
-          rateLimit: getRateLimit(),
-        };
-      }
-    } else {
-      throw new Error('Open API fetch failed');
+      liveData = await response.json();
     }
+    
+    const yf = (yahooFinance as any).default || yahooFinance;
+    let yfResult;
+    
+    try {
+      yfResult = await yf.quote(symbol);
+    } catch (e) {
+      // Direct API Fallback for quote data if library fails
+      const yfRes = await fetch(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbol}`);
+      if (yfRes.ok) {
+        const json = await yfRes.json();
+        yfResult = json.quoteResponse.result[0];
+      }
+    }
+    
+    if (!yfResult) {
+      throw new Error('Failed to fetch stock details from any source');
+    }
+    
+    return {
+      data: {
+        symbol: symbol,
+        name: yfResult.longName || yfResult.shortName || symbol,
+        price: liveData.price || yfResult.regularMarketPrice || 0,
+        change: liveData.change || yfResult.regularMarketChange || 0,
+        changePercent: liveData.percentChange || yfResult.regularMarketChangePercent || 0,
+        peRatio: yfResult.trailingPE ?? 0,
+        eps: yfResult.trailingEps ?? 0,
+        dividendYield: yfResult.dividendYield ?? 0,
+        marketCap: formatMarketCap(yfResult.marketCap),
+        fiftyTwoWeekHigh: yfResult.fiftyTwoWeekHigh ?? 0,
+        fiftyTwoWeekLow: yfResult.fiftyTwoWeekLow ?? 0,
+      },
+      rateLimit: getRateLimit(),
+    };
   } catch (error) {
     console.error(`Error fetching details for ${symbol}:`, error);
-    // Ultimate fallback to Yahoo if Open API fails entirely
-    try {
-      const yf = (yahooFinance as any).default || yahooFinance;
-      const result = await yf.quote(symbol);
-      return {
-        data: {
-          symbol: result.symbol,
-          name: result.longName || result.shortName || result.symbol,
-          price: result.regularMarketPrice ?? 0,
-          change: result.regularMarketChange ?? 0,
-          changePercent: result.regularMarketChangePercent ?? 0,
-          peRatio: result.trailingPE ?? 0,
-          eps: result.trailingEps ?? 0,
-          dividendYield: result.dividendYield ?? 0,
-          marketCap: formatMarketCap(result.marketCap),
-          fiftyTwoWeekHigh: result.fiftyTwoWeekHigh ?? 0,
-          fiftyTwoWeekLow: result.fiftyTwoWeekLow ?? 0,
-        },
-        rateLimit: getRateLimit(),
-      };
-    } catch (lastResortError) {
-      throw lastResortError;
-    }
+    throw error;
   }
 }
