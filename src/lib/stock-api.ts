@@ -1,3 +1,4 @@
+
 'use server';
 
 import { calculateSMA, calculateEMA, calculateRSI } from './stock-utils';
@@ -49,9 +50,11 @@ function getRateLimit() {
   };
 }
 
-/**
- * Formats market cap number to human-readable string (T, B, M)
- */
+const COMMON_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+  'Accept': 'application/json',
+};
+
 function formatMarketCap(val?: number): string {
   if (!val) return 'N/A';
   if (val >= 1e12) return (val / 1e12).toFixed(2) + 'T';
@@ -61,14 +64,16 @@ function formatMarketCap(val?: number): string {
 }
 
 /**
- * Fetches historical data using direct Yahoo API for maximum reliability
+ * Fetches historical data using direct Yahoo API with proper headers
  */
 export async function fetchStockHistory(symbol: string): Promise<ApiResponse<StockDataPoint[]>> {
   try {
-    // Direct API call to Yahoo Finance Chart v8
     const response = await fetch(
       `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=3mo&interval=1d`,
-      { cache: 'no-store' }
+      { 
+        headers: COMMON_HEADERS,
+        cache: 'no-store' 
+      }
     );
 
     if (!response.ok) {
@@ -122,24 +127,17 @@ export async function fetchStockHistory(symbol: string): Promise<ApiResponse<Sto
 }
 
 /**
- * Fetches stock details using a combination of Open API and direct Yahoo Quotes
+ * Fetches stock details using direct Yahoo Quote API with proper headers
  */
 export async function fetchStockDetails(symbol: string): Promise<ApiResponse<StockDetails>> {
   try {
-    // 1. Primary Source: Koyeb Open API for Live Price
-    const liveRes = await fetch(`https://military-jobye-haiqstudios-14f59639.koyeb.app/stock?symbol=${symbol}&res=num`, {
-      cache: 'no-store'
-    });
-    
-    let liveData = { price: 0, change: 0, percentChange: 0 };
-    if (liveRes.ok) {
-      liveData = await liveRes.json();
-    }
-    
-    // 2. Secondary Source: Direct Yahoo Quote API for Fundamentals
-    const quoteRes = await fetch(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbol}`, {
-      cache: 'no-store'
-    });
+    const quoteRes = await fetch(
+      `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbol}`, 
+      {
+        headers: COMMON_HEADERS,
+        cache: 'no-store'
+      }
+    );
 
     if (!quoteRes.ok) {
       throw new Error('Failed to reach Yahoo Quote endpoint');
@@ -156,9 +154,9 @@ export async function fetchStockDetails(symbol: string): Promise<ApiResponse<Sto
       data: {
         symbol: symbol,
         name: yfResult.longName || yfResult.shortName || symbol,
-        price: liveData.price || yfResult.regularMarketPrice || 0,
-        change: liveData.change || yfResult.regularMarketChange || 0,
-        changePercent: liveData.percentChange || yfResult.regularMarketChangePercent || 0,
+        price: yfResult.regularMarketPrice || 0,
+        change: yfResult.regularMarketChange || 0,
+        changePercent: yfResult.regularMarketChangePercent || 0,
         peRatio: yfResult.trailingPE ?? 0,
         eps: yfResult.trailingEps ?? 0,
         dividendYield: yfResult.dividendYield ?? 0,
