@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview AI Stock Analysis Flow.
@@ -16,8 +15,8 @@ const StockAnalysisInputSchema = z.object({
   name: z.string(),
   price: z.number(),
   changePercent: z.number(),
-  marketCap: z.string(),
-  peRatio: z.number(),
+  marketCap: z.string().optional(),
+  peRatio: z.number().optional(),
   history: z.array(z.object({
     date: z.string(),
     close: z.number(),
@@ -32,7 +31,7 @@ export type StockAnalysisInput = z.infer<typeof StockAnalysisInputSchema>;
 const StockAnalysisOutputSchema = z.object({
   summary: z.string().describe('A concise executive summary of the stock status.'),
   technicalVerdict: z.string().describe('Analysis of chart patterns and technical indicators (RSI, SMA, EMA).'),
-  fundamentalHealth: z.string().describe('Assessment based on P/E, EPS, and Market Cap.'),
+  fundamentalHealth: z.string().describe('Assessment based on price action and available metrics.'),
   riskLevel: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).describe('Calculated risk profile.'),
   sentiment: z.enum(['BULLISH', 'NEUTRAL', 'BEARISH']).describe('Overall market sentiment.'),
   recommendation: z.string().describe('A terminal-style final directive.'),
@@ -49,15 +48,15 @@ Analyze the following market data for {{{name}}} ({{{symbol}}}).
 
 CURRENT STATUS:
 - Price: \u0024{{{price}}} ({{{changePercent}}}%)
-- Market Cap: {{{marketCap}}}
-- P/E Ratio: {{{peRatio}}}
+- Market Cap: {{#if marketCap}}{{{marketCap}}}{{else}}N/A{{/if}}
+- P/E Ratio: {{#if peRatio}}{{{peRatio}}}{{else}}N/A{{/if}}
 
 HISTORICAL OVERVIEW (Technical Snapshot):
 {{#each history}}
 - Date: {{{date}}}, Close: {{{close}}}, RSI: {{{rsi}}}, SMA20: {{{sma20}}}
 {{/each}}
 
-Identify momentum shifts, potential breakouts, or breakdown risks. Be objective, precise, and adopt a "terminal" tone. No fluff.`,
+Identify momentum shifts, potential breakouts, or breakdown risks using technical indicators. Since fundamental data might be limited, prioritize price action and trend analysis. Adopt a "terminal" tone. No fluff.`,
 });
 
 export async function analyzeStock(input: StockAnalysisInput): Promise<StockAnalysisOutput> {

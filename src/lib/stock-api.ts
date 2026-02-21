@@ -1,10 +1,9 @@
-
 'use server';
 
 /**
- * @fileOverview STARFISH Direct Market Data Engine.
- * Uses native fetch to interface with Yahoo Finance public endpoints.
- * Includes automatic Indian Market (.NS) symbol resolution.
+ * @fileOverview STARFISH Alpaca Market Data Engine.
+ * Uses native fetch to interface with Alpaca V2 Data API.
+ * Requires ALPACA_API_KEY and ALPACA_SECRET env variables.
  */
 
 import { calculateSMA, calculateEMA, calculateRSI } from './stock-utils';
@@ -27,10 +26,10 @@ export interface StockDetails {
   price: number;
   change: number;
   changePercent: number;
-  peRatio: number;
-  eps: number;
-  dividendYield: number;
-  marketCap: string;
+  peRatio: number; // Placeholder for Alpaca (not in market data API)
+  eps: number;     // Placeholder for Alpaca
+  dividendYield: number; // Placeholder for Alpaca
+  marketCap: string;     // Placeholder for Alpaca
   fiftyTwoWeekHigh: number;
   fiftyTwoWeekLow: number;
 }
@@ -44,72 +43,48 @@ export interface ApiResponse<T> {
   };
 }
 
-let remainingRequests = 100;
-const TOTAL_LIMIT = 100;
+const ALPACA_BASE_URL = 'https://data.alpaca.markets/v2';
 
-function getRateLimit() {
-  remainingRequests = Math.max(0, remainingRequests - 1);
+function getAlpacaHeaders() {
   return {
-    remaining: remainingRequests,
-    total: TOTAL_LIMIT,
-    resetIn: 3600,
+    'APCA-API-KEY-ID': process.env.ALPACA_API_KEY || '',
+    'APCA-API-SECRET-KEY': process.env.ALPACA_SECRET || '',
+    'Accept': 'application/json',
   };
 }
 
-const COMMON_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-  'Accept': 'application/json',
-  'Referer': 'https://finance.yahoo.com/',
-  'Origin': 'https://finance.yahoo.com',
-};
-
-function formatMarketCap(val?: number): string {
-  if (!val) return 'N/A';
-  if (val >= 1e12) return (val / 1e12).toFixed(2) + 'T';
-  if (val >= 1e9) return (val / 1e9).toFixed(2) + 'B';
-  if (val >= 1e6) return (val / 1e6).toFixed(2) + 'M';
-  return val.toString();
-}
-
 /**
- * Direct fetch for historical data with fallback for Indian symbols.
+ * Fetches historical bar data from Alpaca.
  */
 export async function fetchStockHistory(symbol: string): Promise<ApiResponse<StockDataPoint[]>> {
   try {
-    const formattedSymbol = symbol.includes('.') ? symbol : `${symbol.toUpperCase()}.NS`;
+    const end = new Date().toISOString();
+    const start = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(); // 90 days ago
     
-    let response = await fetch(
-      `https://query1.finance.yahoo.com/v8/finance/chart/${formattedSymbol}?range=3mo&interval=1d`,
-      { headers: COMMON_HEADERS, next: { revalidate: 60 } }
-    );
+    const url = `${ALPACA_BASE_URL}/stocks/${symbol.toUpperCase()}/bars?timeframe=1Day&start=${start}&end=${end}&adjustment=all`;
+    
+    const response = await fetch(url, {
+      headers: getAlpacaHeaders(),
+      next: { revalidate: 300 } // Cache for 5 mins
+    });
 
-    if (!response.ok && !symbol.includes('.')) {
-      // Fallback for global symbols if .NS attempt failed
-      response = await fetch(
-        `https://query1.finance.yahoo.com/v8/finance/chart/${symbol.toUpperCase()}?range=3mo&interval=1d`,
-        { headers: COMMON_HEADERS, next: { revalidate: 60 } }
-      );
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Alpaca History Error:', errorText);
+      throw new Error(`Alpaca API error: ${response.status}`);
     }
 
-    if (!response.ok) throw new Error('History Fetch Failed');
-
     const json = await response.json();
-    const result = json.chart?.result?.[0];
+    const bars = json.bars || [];
 
-    if (!result || !result.timestamp) throw new Error('No Data');
-
-    const timestamps = result.timestamp;
-    const quotes = result.indicators.quote[0];
-    const adjClose = result.indicators.adjclose?.[0]?.adjclose || quotes.close;
-
-    const rawData: StockDataPoint[] = timestamps.map((ts: number, i: number) => ({
-      date: new Date(ts * 1000).toISOString().split('T')[0],
-      open: quotes.open[i] ?? 0,
-      high: quotes.high[i] ?? 0,
-      low: quotes.low[i] ?? 0,
-      close: adjClose[i] ?? quotes.close[i] ?? 0,
-      volume: quotes.volume[i] ?? 0,
-    })).filter((d: any) => d.close > 0);
+    const rawData: StockDataPoint[] = bars.map((bar: any) => ({
+      date: bar.t.split('T')[0],
+      open: bar.o,
+      high: bar.h,
+      low: bar.l,
+      close: bar.c,
+      volume: bar.v,
+    }));
 
     // Inject Technical Indicators
     const closes = rawData.map(d => d.close);
@@ -124,55 +99,60 @@ export async function fetchStockHistory(symbol: string): Promise<ApiResponse<Sto
       rsi: rsi[i],
     }));
 
-    return { data: enrichedData, rateLimit: getRateLimit() };
+    return { 
+      data: enrichedData, 
+      rateLimit: { remaining: 1000, total: 1000, resetIn: 0 } 
+    };
   } catch (error) {
     console.error('Terminal History Error:', error);
-    return { data: [], rateLimit: getRateLimit() };
+    return { data: [], rateLimit: { remaining: 0, total: 0, resetIn: 0 } };
   }
 }
 
 /**
- * Direct fetch for real-time stock details.
+ * Fetches real-time snapshot data from Alpaca.
  */
 export async function fetchStockDetails(symbol: string): Promise<ApiResponse<StockDetails>> {
   try {
-    const formattedSymbol = symbol.includes('.') ? symbol : `${symbol.toUpperCase()}.NS`;
+    const url = `${ALPACA_BASE_URL}/stocks/${symbol.toUpperCase()}/snapshot`;
+    
+    const response = await fetch(url, {
+      headers: getAlpacaHeaders(),
+      next: { revalidate: 60 } // Cache for 1 min
+    });
 
-    let response = await fetch(
-      `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${formattedSymbol}`,
-      { headers: COMMON_HEADERS, next: { revalidate: 60 } }
-    );
-
-    let json = await response.json();
-    let result = json.quoteResponse?.result?.[0];
-
-    if (!result && !symbol.includes('.')) {
-      // Fallback for global symbols
-      response = await fetch(
-        `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbol.toUpperCase()}`,
-        { headers: COMMON_HEADERS, next: { revalidate: 60 } }
-      );
-      json = await response.json();
-      result = json.quoteResponse?.result?.[0];
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Alpaca Details Error:', errorText);
+      throw new Error(`Alpaca API error: ${response.status}`);
     }
 
-    if (!result) throw new Error('Symbol Not Found');
+    const json = await response.json();
+    const dailyBar = json.dailyBar;
+    const prevDailyBar = json.prevDailyBar;
+    const latestTrade = json.latestTrade;
+
+    if (!dailyBar || !prevDailyBar) throw new Error('Symbol details not found');
+
+    const price = latestTrade?.p || dailyBar.c;
+    const change = price - prevDailyBar.c;
+    const changePercent = (change / prevDailyBar.c) * 100;
 
     return {
       data: {
-        symbol: result.symbol,
-        name: result.longName || result.shortName || result.symbol,
-        price: result.regularMarketPrice || 0,
-        change: result.regularMarketChange || 0,
-        changePercent: result.regularMarketChangePercent || 0,
-        peRatio: result.trailingPE || 0,
-        eps: result.trailingEps || 0,
-        dividendYield: result.dividendYield || 0,
-        marketCap: formatMarketCap(result.marketCap),
-        fiftyTwoWeekHigh: result.fiftyTwoWeekHigh || 0,
-        fiftyTwoWeekLow: result.fiftyTwoWeekLow || 0,
+        symbol: symbol.toUpperCase(),
+        name: symbol.toUpperCase(), // Alpaca Data API doesn't provide company names
+        price: Number(price.toFixed(2)),
+        change: Number(change.toFixed(2)),
+        changePercent: Number(changePercent.toFixed(2)),
+        peRatio: 0, // Fundamentals not available in Alpaca Market Data API
+        eps: 0,
+        dividendYield: 0,
+        marketCap: 'N/A',
+        fiftyTwoWeekHigh: 0, // Would require fetching 1yr of bars to calculate
+        fiftyTwoWeekLow: 0,
       },
-      rateLimit: getRateLimit(),
+      rateLimit: { remaining: 1000, total: 1000, resetIn: 0 },
     };
   } catch (error) {
     console.error('Terminal Details Error:', error);
