@@ -2,8 +2,7 @@
 
 /**
  * @fileOverview STARFISH Alpaca Market Data Engine.
- * Uses native fetch to interface with Alpaca V2 Data API.
- * Requires ALPACA_API_KEY and ALPACA_SECRET env variables.
+ * High-performance native fetch implementation for Alpaca V2 Data API.
  */
 
 import { calculateSMA, calculateEMA, calculateRSI } from './stock-utils';
@@ -35,11 +34,11 @@ export interface StockDetails {
 }
 
 export interface ApiResponse<T> {
-  data: T;
+  data: T | null;
+  error?: string;
   rateLimit: {
     remaining: number;
     total: number;
-    resetIn: number;
   };
 }
 
@@ -50,40 +49,36 @@ function getAlpacaHeaders() {
   const secretKey = process.env.ALPACA_SECRET;
 
   if (!keyId || !secretKey) {
-    console.warn('Alpaca credentials missing in environment variables.');
+    console.error('CRITICAL: Alpaca credentials missing.');
+    return null;
   }
 
   return {
-    'APCA-API-KEY-ID': keyId || '',
-    'APCA-API-SECRET-KEY': secretKey || '',
+    'APCA-API-KEY-ID': keyId,
+    'APCA-API-SECRET-KEY': secretKey,
     'Accept': 'application/json',
   };
 }
 
 /**
- * Fetches historical bar data from Alpaca for technical analysis.
- * Fetches 180 days to ensure indicators are stabilized for the visible 90-day window.
+ * Fetches historical bars and calculates technical indicators.
  */
 export async function fetchStockHistory(symbol: string): Promise<ApiResponse<StockDataPoint[]>> {
+  const headers = getAlpacaHeaders();
+  if (!headers) return { data: null, error: 'Credentials missing', rateLimit: { remaining: 0, total: 0 } };
+
   try {
     const end = new Date().toISOString();
     const start = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString();
-    
     const url = `${ALPACA_BASE_URL}/stocks/${symbol.toUpperCase()}/bars?timeframe=1Day&start=${start}&end=${end}&adjustment=all`;
-    
-    const response = await fetch(url, {
-      headers: getAlpacaHeaders(),
-      next: { revalidate: 300 }
-    });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Alpaca API Error:', errorText);
-      throw new Error(`Alpaca API error: ${response.status}`);
-    }
+    const res = await fetch(url, { headers, next: { revalidate: 300 } });
+    if (!res.ok) throw new Error(`Alpaca Error: ${res.status}`);
 
-    const json = await response.json();
+    const json = await res.json();
     const bars = json.bars || [];
+
+    if (bars.length === 0) return { data: [], rateLimit: { remaining: 1000, total: 1000 } };
 
     const rawData: StockDataPoint[] = bars.map((bar: any) => ({
       date: bar.t.split('T')[0],
@@ -94,90 +89,82 @@ export async function fetchStockHistory(symbol: string): Promise<ApiResponse<Sto
       volume: bar.v,
     }));
 
-    // Inject Technical Indicators
     const closes = rawData.map(d => d.close);
     const sma20 = calculateSMA(closes, 20);
     const ema50 = calculateEMA(closes, 50);
     const rsi = calculateRSI(closes, 14);
 
-    const enrichedData = rawData.map((d, i) => ({
+    const enriched = rawData.map((d, i) => ({
       ...d,
       sma20: sma20[i],
       ema50: ema50[i],
       rsi: rsi[i],
     }));
 
-    // Return only the last 90 data points for the UI
     return { 
-      data: enrichedData.slice(-90), 
-      rateLimit: { remaining: 1000, total: 1000, resetIn: 0 } 
+      data: enriched.slice(-90), 
+      rateLimit: { remaining: 1000, total: 1000 } 
     };
-  } catch (error) {
-    console.error('Historical Fetch Failure:', error);
-    return { data: [], rateLimit: { remaining: 0, total: 0, resetIn: 0 } };
+  } catch (err: any) {
+    return { data: null, error: err.message, rateLimit: { remaining: 0, total: 0 } };
   }
 }
 
 /**
- * Fetches real-time snapshot data and calculates year-range metrics.
+ * Fetches snapshot for real-time price and daily metrics.
  */
 export async function fetchStockDetails(symbol: string): Promise<ApiResponse<StockDetails>> {
+  const headers = getAlpacaHeaders();
+  if (!headers) return { data: null, error: 'Credentials missing', rateLimit: { remaining: 0, total: 0 } };
+
   try {
-    // 1. Fetch Snapshot for live price and daily change
-    const snapshotUrl = `${ALPACA_BASE_URL}/stocks/${symbol.toUpperCase()}/snapshot`;
-    const snapshotResponse = await fetch(snapshotUrl, {
-      headers: getAlpacaHeaders(),
-      next: { revalidate: 60 }
-    });
-
-    if (!snapshotResponse.ok) throw new Error('Failed to fetch snapshot');
-    const snapshot = await snapshotResponse.json();
+    const sym = symbol.toUpperCase();
+    const snapshotUrl = `${ALPACA_BASE_URL}/stocks/${sym}/snapshot`;
+    const snapRes = await fetch(snapshotUrl, { headers, next: { revalidate: 60 } });
     
-    const dailyBar = snapshot.dailyBar;
-    const prevDailyBar = snapshot.prevDailyBar;
-    const latestTrade = snapshot.latestTrade;
+    if (!snapRes.ok) throw new Error('Symbol not found');
+    const snapshot = await snapRes.json();
 
-    if (!dailyBar || !prevDailyBar) throw new Error('Symbol not found in Alpaca registry');
+    if (!snapshot.dailyBar || !snapshot.prevDailyBar) throw new Error('Incomplete market data');
 
-    const currentPrice = latestTrade?.p || dailyBar.c;
-    const change = currentPrice - prevDailyBar.c;
-    const changePercent = (change / prevDailyBar.c) * 100;
+    const currentPrice = snapshot.latestTrade?.p || snapshot.dailyBar.c;
+    const change = currentPrice - snapshot.prevDailyBar.c;
+    const changePercent = (change / snapshot.prevDailyBar.c) * 100;
 
-    // 2. Fetch 1 Year of bars for 52-week high/low
+    // Fetch year bars for 52-week range
     const yearStart = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
-    const barsUrl = `${ALPACA_BASE_URL}/stocks/${symbol.toUpperCase()}/bars?timeframe=1Day&start=${yearStart}&adjustment=all`;
-    const barsResponse = await fetch(barsUrl, { headers: getAlpacaHeaders(), next: { revalidate: 3600 } });
+    const barsUrl = `${ALPACA_BASE_URL}/stocks/${sym}/bars?timeframe=1Day&start=${yearStart}&adjustment=all`;
+    const barsRes = await fetch(barsUrl, { headers, next: { revalidate: 3600 } });
     
-    let fiftyTwoWeekHigh = currentPrice;
-    let fiftyTwoWeekLow = currentPrice;
+    let high = currentPrice;
+    let low = currentPrice;
 
-    if (barsResponse.ok) {
-      const barsJson = await barsResponse.json();
-      const yearBars = barsJson.bars || [];
-      if (yearBars.length > 0) {
-        fiftyTwoWeekHigh = Math.max(...yearBars.map((b: any) => b.h), currentPrice);
-        fiftyTwoWeekLow = Math.min(...yearBars.map((b: any) => b.l), currentPrice);
+    if (barsRes.ok) {
+      const barsJson = await barsRes.Res.json();
+      const bars = barsJson.bars || [];
+      if (bars.length > 0) {
+        high = Math.max(...bars.map((b: any) => b.h), currentPrice);
+        low = Math.min(...bars.map((b: any) => b.l), currentPrice);
       }
     }
 
     return {
       data: {
-        symbol: symbol.toUpperCase(),
-        name: symbol.toUpperCase(),
+        symbol: sym,
+        name: sym,
         price: Number(currentPrice.toFixed(2)),
         change: Number(change.toFixed(2)),
         changePercent: Number(changePercent.toFixed(2)),
-        peRatio: 0,
+        peRatio: 0, // Fundamentals require separate premium data subscriptions
         eps: 0,
         dividendYield: 0,
         marketCap: 'N/A',
-        fiftyTwoWeekHigh: Number(fiftyTwoWeekHigh.toFixed(2)),
-        fiftyTwoWeekLow: Number(fiftyTwoWeekLow.toFixed(2)),
+        fiftyTwoWeekHigh: Number(high.toFixed(2)),
+        fiftyTwoWeekLow: Number(low.toFixed(2)),
       },
-      rateLimit: { remaining: 1000, total: 1000, resetIn: 0 },
+      rateLimit: { remaining: 1000, total: 1000 }
     };
-  } catch (error) {
-    console.error('Details Fetch Failure:', error);
-    throw error;
+  } catch (err: any) {
+    return { data: null, error: err.message, rateLimit: { remaining: 0, total: 0 } };
   }
 }
