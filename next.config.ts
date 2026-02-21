@@ -1,14 +1,13 @@
+
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
-  /* config options here */
   typescript: {
     ignoreBuildErrors: true,
   },
   eslint: {
     ignoreDuringBuilds: true,
   },
-  // Removed yahoo-finance2 from external packages as we are using direct fetch for stability
   images: {
     remotePatterns: [
       {
