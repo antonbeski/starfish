@@ -5,7 +5,7 @@ import { StockAnalysisOutput, analyzeStock } from "@/ai/flows/stock-analysis-flo
 import { StockDetails, StockDataPoint } from "@/lib/stock-api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BrainCircuit, Loader2, ShieldAlert, Zap, Target, TrendingUp, AlertTriangle } from "lucide-react";
+import { Loader2, ShieldAlert, Zap, Target, TrendingUp, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 interface AiAnalysisProps {
@@ -47,7 +47,6 @@ export function AiAnalysis({ details, history }: AiAnalysisProps) {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b-2 border-primary pb-4 gap-4">
         <div className="flex items-center gap-3">
-          <BrainCircuit className="w-5 h-5 md:w-6 md:h-6" />
           <h2 className="text-lg md:text-2xl font-black tracking-tighter uppercase italic">Intelligence Core</h2>
         </div>
         {!analysis && !loading && (
