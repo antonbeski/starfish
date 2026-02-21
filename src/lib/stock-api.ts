@@ -50,9 +50,12 @@ function getRateLimit() {
   };
 }
 
+// Robust headers to avoid being blocked by Yahoo Finance
 const COMMON_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
   'Accept': 'application/json',
+  'Referer': 'https://finance.yahoo.com/',
+  'Origin': 'https://finance.yahoo.com',
 };
 
 function formatMarketCap(val?: number): string {
@@ -68,55 +71,34 @@ function formatMarketCap(val?: number): string {
  */
 export async function fetchStockHistory(symbol: string): Promise<ApiResponse<StockDataPoint[]>> {
   try {
+    // Standardize symbol for Indian stocks if it looks like a common Indian ticker without .NS
+    const querySymbol = symbol.includes('.') ? symbol : `${symbol}.NS`;
+    
     const response = await fetch(
-      `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=3mo&interval=1d`,
+      `https://query1.finance.yahoo.com/v8/finance/chart/${querySymbol}?range=3mo&interval=1d`,
       { 
         headers: COMMON_HEADERS,
-        cache: 'no-store' 
+        next: { revalidate: 60 } // Cache for 1 minute on server
       }
     );
 
     if (!response.ok) {
-      throw new Error(`Yahoo API error: ${response.statusText}`);
+      // If the standardized .NS failed, try the raw symbol
+      const retryRes = await fetch(
+        `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=3mo&interval=1d`,
+        { headers: COMMON_HEADERS, next: { revalidate: 60 } }
+      );
+      
+      if (!retryRes.ok) {
+        throw new Error(`Yahoo API error: ${response.statusText}`);
+      }
+      const retryJson = await retryRes.json();
+      return processChartResponse(retryJson);
     }
 
     const json = await response.json();
-    const result = json.chart?.result?.[0];
+    return processChartResponse(json);
 
-    if (!result || !result.timestamp) {
-      throw new Error('No historical data found for this symbol');
-    }
-
-    const timestamps = result.timestamp;
-    const indicators = result.indicators.quote[0];
-    const adjClose = result.indicators.adjclose?.[0]?.adjclose || indicators.close;
-
-    const data: StockDataPoint[] = timestamps.map((ts: number, i: number) => ({
-      date: new Date(ts * 1000).toISOString().split('T')[0],
-      open: indicators.open[i] ?? 0,
-      high: indicators.high[i] ?? 0,
-      low: indicators.low[i] ?? 0,
-      close: adjClose[i] ?? indicators.close[i] ?? 0,
-      volume: indicators.volume[i] ?? 0,
-    })).filter((d: any) => d.close > 0);
-
-    // Calculate Technical Indicators
-    const closes = data.map(d => d.close);
-    const sma20 = calculateSMA(closes, 20);
-    const ema50 = calculateEMA(closes, 50);
-    const rsi = calculateRSI(closes, 14);
-
-    const enrichedData = data.map((d, i) => ({
-      ...d,
-      sma20: sma20[i],
-      ema50: ema50[i],
-      rsi: rsi[i],
-    }));
-
-    return {
-      data: enrichedData,
-      rateLimit: getRateLimit(),
-    };
   } catch (error) {
     console.error(`Terminal Error [History] for ${symbol}:`, error);
     return {
@@ -126,16 +108,57 @@ export async function fetchStockHistory(symbol: string): Promise<ApiResponse<Sto
   }
 }
 
+function processChartResponse(json: any): ApiResponse<StockDataPoint[]> {
+  const result = json.chart?.result?.[0];
+
+  if (!result || !result.timestamp) {
+    throw new Error('No historical data found for this symbol');
+  }
+
+  const timestamps = result.timestamp;
+  const indicators = result.indicators.quote[0];
+  const adjClose = result.indicators.adjclose?.[0]?.adjclose || indicators.close;
+
+  const data: StockDataPoint[] = timestamps.map((ts: number, i: number) => ({
+    date: new Date(ts * 1000).toISOString().split('T')[0],
+    open: indicators.open[i] ?? 0,
+    high: indicators.high[i] ?? 0,
+    low: indicators.low[i] ?? 0,
+    close: adjClose[i] ?? indicators.close[i] ?? 0,
+    volume: indicators.volume[i] ?? 0,
+  })).filter((d: any) => d.close > 0);
+
+  // Calculate Technical Indicators
+  const closes = data.map(d => d.close);
+  const sma20 = calculateSMA(closes, 20);
+  const ema50 = calculateEMA(closes, 50);
+  const rsi = calculateRSI(closes, 14);
+
+  const enrichedData = data.map((d, i) => ({
+    ...d,
+    sma20: sma20[i],
+    ema50: ema50[i],
+    rsi: rsi[i],
+  }));
+
+  return {
+    data: enrichedData,
+    rateLimit: getRateLimit(),
+  };
+}
+
 /**
  * Fetches stock details using direct Yahoo Quote API with proper headers
  */
 export async function fetchStockDetails(symbol: string): Promise<ApiResponse<StockDetails>> {
   try {
+    const querySymbol = symbol.includes('.') ? symbol : `${symbol}.NS`;
+
     const quoteRes = await fetch(
-      `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbol}`, 
+      `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${querySymbol}`, 
       {
         headers: COMMON_HEADERS,
-        cache: 'no-store'
+        next: { revalidate: 60 }
       }
     );
 
@@ -144,7 +167,17 @@ export async function fetchStockDetails(symbol: string): Promise<ApiResponse<Sto
     }
 
     const quoteJson = await quoteRes.json();
-    const yfResult = quoteJson.quoteResponse?.result?.[0];
+    let yfResult = quoteJson.quoteResponse?.result?.[0];
+
+    // Fallback logic for non-Indian stocks if .NS failed
+    if (!yfResult && querySymbol.endsWith('.NS')) {
+      const retryRes = await fetch(
+        `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbol}`, 
+        { headers: COMMON_HEADERS, next: { revalidate: 60 } }
+      );
+      const retryJson = await retryRes.json();
+      yfResult = retryJson.quoteResponse?.result?.[0];
+    }
 
     if (!yfResult) {
       throw new Error('No details found for this symbol');
@@ -152,7 +185,7 @@ export async function fetchStockDetails(symbol: string): Promise<ApiResponse<Sto
     
     return {
       data: {
-        symbol: symbol,
+        symbol: yfResult.symbol || symbol,
         name: yfResult.longName || yfResult.shortName || symbol,
         price: yfResult.regularMarketPrice || 0,
         change: yfResult.regularMarketChange || 0,

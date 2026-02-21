@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview AI Stock Analysis Flow.
@@ -23,7 +24,7 @@ const StockAnalysisInputSchema = z.object({
     rsi: z.number().nullable().optional(),
     sma20: z.number().nullable().optional(),
     ema50: z.number().nullable().optional(),
-  })).describe('Last 90 days of price and technical data'),
+  })).describe('Last 30-90 days of price and technical data'),
 });
 
 export type StockAnalysisInput = z.infer<typeof StockAnalysisInputSchema>;
@@ -51,7 +52,7 @@ CURRENT STATUS:
 - Market Cap: {{{marketCap}}}
 - P/E Ratio: {{{peRatio}}}
 
-HISTORICAL OVERVIEW (Last 90 Days):
+HISTORICAL OVERVIEW (Technical Snapshot):
 {{#each history}}
 - Date: {{{date}}}, Close: {{{close}}}, RSI: {{{rsi}}}, SMA20: {{{sma20}}}
 {{/each}}
