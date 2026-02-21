@@ -26,10 +26,10 @@ export interface StockDetails {
   price: number;
   change: number;
   changePercent: number;
-  peRatio: number; // Placeholder for Alpaca (not in market data API)
-  eps: number;     // Placeholder for Alpaca
-  dividendYield: number; // Placeholder for Alpaca
-  marketCap: string;     // Placeholder for Alpaca
+  peRatio: number;
+  eps: number;
+  dividendYield: number;
+  marketCap: string;
   fiftyTwoWeekHigh: number;
   fiftyTwoWeekLow: number;
 }
@@ -46,31 +46,39 @@ export interface ApiResponse<T> {
 const ALPACA_BASE_URL = 'https://data.alpaca.markets/v2';
 
 function getAlpacaHeaders() {
+  const keyId = process.env.ALPACA_API_KEY;
+  const secretKey = process.env.ALPACA_SECRET;
+
+  if (!keyId || !secretKey) {
+    console.warn('Alpaca credentials missing in environment variables.');
+  }
+
   return {
-    'APCA-API-KEY-ID': process.env.ALPACA_API_KEY || '',
-    'APCA-API-SECRET-KEY': process.env.ALPACA_SECRET || '',
+    'APCA-API-KEY-ID': keyId || '',
+    'APCA-API-SECRET-KEY': secretKey || '',
     'Accept': 'application/json',
   };
 }
 
 /**
- * Fetches historical bar data from Alpaca.
+ * Fetches historical bar data from Alpaca for technical analysis.
+ * Fetches 180 days to ensure indicators are stabilized for the visible 90-day window.
  */
 export async function fetchStockHistory(symbol: string): Promise<ApiResponse<StockDataPoint[]>> {
   try {
     const end = new Date().toISOString();
-    const start = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(); // 90 days ago
+    const start = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString();
     
     const url = `${ALPACA_BASE_URL}/stocks/${symbol.toUpperCase()}/bars?timeframe=1Day&start=${start}&end=${end}&adjustment=all`;
     
     const response = await fetch(url, {
       headers: getAlpacaHeaders(),
-      next: { revalidate: 300 } // Cache for 5 mins
+      next: { revalidate: 300 }
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Alpaca History Error:', errorText);
+      console.error('Alpaca API Error:', errorText);
       throw new Error(`Alpaca API error: ${response.status}`);
     }
 
@@ -99,63 +107,77 @@ export async function fetchStockHistory(symbol: string): Promise<ApiResponse<Sto
       rsi: rsi[i],
     }));
 
+    // Return only the last 90 data points for the UI
     return { 
-      data: enrichedData, 
+      data: enrichedData.slice(-90), 
       rateLimit: { remaining: 1000, total: 1000, resetIn: 0 } 
     };
   } catch (error) {
-    console.error('Terminal History Error:', error);
+    console.error('Historical Fetch Failure:', error);
     return { data: [], rateLimit: { remaining: 0, total: 0, resetIn: 0 } };
   }
 }
 
 /**
- * Fetches real-time snapshot data from Alpaca.
+ * Fetches real-time snapshot data and calculates year-range metrics.
  */
 export async function fetchStockDetails(symbol: string): Promise<ApiResponse<StockDetails>> {
   try {
-    const url = `${ALPACA_BASE_URL}/stocks/${symbol.toUpperCase()}/snapshot`;
-    
-    const response = await fetch(url, {
+    // 1. Fetch Snapshot for live price and daily change
+    const snapshotUrl = `${ALPACA_BASE_URL}/stocks/${symbol.toUpperCase()}/snapshot`;
+    const snapshotResponse = await fetch(snapshotUrl, {
       headers: getAlpacaHeaders(),
-      next: { revalidate: 60 } // Cache for 1 min
+      next: { revalidate: 60 }
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Alpaca Details Error:', errorText);
-      throw new Error(`Alpaca API error: ${response.status}`);
-    }
+    if (!snapshotResponse.ok) throw new Error('Failed to fetch snapshot');
+    const snapshot = await snapshotResponse.json();
+    
+    const dailyBar = snapshot.dailyBar;
+    const prevDailyBar = snapshot.prevDailyBar;
+    const latestTrade = snapshot.latestTrade;
 
-    const json = await response.json();
-    const dailyBar = json.dailyBar;
-    const prevDailyBar = json.prevDailyBar;
-    const latestTrade = json.latestTrade;
+    if (!dailyBar || !prevDailyBar) throw new Error('Symbol not found in Alpaca registry');
 
-    if (!dailyBar || !prevDailyBar) throw new Error('Symbol details not found');
-
-    const price = latestTrade?.p || dailyBar.c;
-    const change = price - prevDailyBar.c;
+    const currentPrice = latestTrade?.p || dailyBar.c;
+    const change = currentPrice - prevDailyBar.c;
     const changePercent = (change / prevDailyBar.c) * 100;
+
+    // 2. Fetch 1 Year of bars for 52-week high/low
+    const yearStart = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
+    const barsUrl = `${ALPACA_BASE_URL}/stocks/${symbol.toUpperCase()}/bars?timeframe=1Day&start=${yearStart}&adjustment=all`;
+    const barsResponse = await fetch(barsUrl, { headers: getAlpacaHeaders(), next: { revalidate: 3600 } });
+    
+    let fiftyTwoWeekHigh = currentPrice;
+    let fiftyTwoWeekLow = currentPrice;
+
+    if (barsResponse.ok) {
+      const barsJson = await barsResponse.json();
+      const yearBars = barsJson.bars || [];
+      if (yearBars.length > 0) {
+        fiftyTwoWeekHigh = Math.max(...yearBars.map((b: any) => b.h), currentPrice);
+        fiftyTwoWeekLow = Math.min(...yearBars.map((b: any) => b.l), currentPrice);
+      }
+    }
 
     return {
       data: {
         symbol: symbol.toUpperCase(),
-        name: symbol.toUpperCase(), // Alpaca Data API doesn't provide company names
-        price: Number(price.toFixed(2)),
+        name: symbol.toUpperCase(),
+        price: Number(currentPrice.toFixed(2)),
         change: Number(change.toFixed(2)),
         changePercent: Number(changePercent.toFixed(2)),
-        peRatio: 0, // Fundamentals not available in Alpaca Market Data API
+        peRatio: 0,
         eps: 0,
         dividendYield: 0,
         marketCap: 'N/A',
-        fiftyTwoWeekHigh: 0, // Would require fetching 1yr of bars to calculate
-        fiftyTwoWeekLow: 0,
+        fiftyTwoWeekHigh: Number(fiftyTwoWeekHigh.toFixed(2)),
+        fiftyTwoWeekLow: Number(fiftyTwoWeekLow.toFixed(2)),
       },
       rateLimit: { remaining: 1000, total: 1000, resetIn: 0 },
     };
   } catch (error) {
-    console.error('Terminal Details Error:', error);
+    console.error('Details Fetch Failure:', error);
     throw error;
   }
 }
