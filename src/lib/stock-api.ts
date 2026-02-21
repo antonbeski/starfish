@@ -64,15 +64,18 @@ function formatMarketCap(val?: number): string {
 export async function fetchStockHistory(symbol: string): Promise<ApiResponse<StockDataPoint[]>> {
   try {
     const queryOptions = { period1: '3mo', interval: '1d' as any };
-    const result = await yahooFinance.chart(symbol, queryOptions);
+    
+    // Ensure we are using the default export correctly for the server environment
+    const yf = (yahooFinance as any).default || yahooFinance;
+    const result = await yf.chart(symbol, queryOptions);
     
     if (!result || !result.quotes) {
       throw new Error('No historical data found');
     }
 
     const data: StockDataPoint[] = result.quotes
-      .filter(q => q.date && q.close !== null)
-      .map(q => ({
+      .filter((q: any) => q.date && q.close !== null)
+      .map((q: any) => ({
         date: new Date(q.date).toISOString().split('T')[0],
         open: q.open ?? 0,
         high: q.high ?? 0,
@@ -99,36 +102,93 @@ export async function fetchStockHistory(symbol: string): Promise<ApiResponse<Sto
     };
   } catch (error) {
     console.error(`Error fetching history for ${symbol}:`, error);
-    throw error;
+    // Fallback if Yahoo fails
+    return {
+      data: [],
+      rateLimit: getRateLimit(),
+    };
   }
 }
 
 export async function fetchStockDetails(symbol: string): Promise<ApiResponse<StockDetails>> {
   try {
-    const result = await yahooFinance.quote(symbol);
+    // Attempt to use the provided Free Open API for live data
+    // This API is specifically mentioned as being good for live current prices
+    const response = await fetch(`https://military-jobye-haiqstudios-14f59639.koyeb.app/stock?symbol=${symbol}&res=num`, {
+      cache: 'no-store'
+    });
     
-    if (!result) {
-      throw new Error('No stock details found');
+    if (response.ok) {
+      const liveData = await response.json();
+      
+      // If the open API succeeds, we still might need extra info (like 52w range) 
+      // which we can attempt to get from Yahoo as a secondary source.
+      try {
+        const yf = (yahooFinance as any).default || yahooFinance;
+        const yfResult = await yf.quote(symbol);
+        
+        return {
+          data: {
+            symbol: symbol,
+            name: yfResult.longName || yfResult.shortName || symbol,
+            price: liveData.price || yfResult.regularMarketPrice || 0,
+            change: liveData.change || yfResult.regularMarketChange || 0,
+            changePercent: liveData.percentChange || yfResult.regularMarketChangePercent || 0,
+            peRatio: yfResult.trailingPE ?? 0,
+            eps: yfResult.trailingEps ?? 0,
+            dividendYield: yfResult.dividendYield ?? 0,
+            marketCap: formatMarketCap(yfResult.marketCap),
+            fiftyTwoWeekHigh: yfResult.fiftyTwoWeekHigh ?? 0,
+            fiftyTwoWeekLow: yfResult.fiftyTwoWeekLow ?? 0,
+          },
+          rateLimit: getRateLimit(),
+        };
+      } catch (yfError) {
+        // If Yahoo fails, return what we got from the Open API
+        return {
+          data: {
+            symbol: symbol,
+            name: symbol,
+            price: liveData.price || 0,
+            change: liveData.change || 0,
+            changePercent: liveData.percentChange || 0,
+            peRatio: 0,
+            eps: 0,
+            dividendYield: 0,
+            marketCap: 'N/A',
+            fiftyTwoWeekHigh: 0,
+            fiftyTwoWeekLow: 0,
+          },
+          rateLimit: getRateLimit(),
+        };
+      }
+    } else {
+      throw new Error('Open API fetch failed');
     }
-
-    return {
-      data: {
-        symbol: result.symbol,
-        name: result.longName || result.shortName || result.symbol,
-        price: result.regularMarketPrice ?? 0,
-        change: result.regularMarketChange ?? 0,
-        changePercent: result.regularMarketChangePercent ?? 0,
-        peRatio: result.trailingPE ?? 0,
-        eps: result.trailingEps ?? 0,
-        dividendYield: result.dividendYield ?? 0,
-        marketCap: formatMarketCap(result.marketCap),
-        fiftyTwoWeekHigh: result.fiftyTwoWeekHigh ?? 0,
-        fiftyTwoWeekLow: result.fiftyTwoWeekLow ?? 0,
-      },
-      rateLimit: getRateLimit(),
-    };
   } catch (error) {
     console.error(`Error fetching details for ${symbol}:`, error);
-    throw error;
+    // Ultimate fallback to Yahoo if Open API fails entirely
+    try {
+      const yf = (yahooFinance as any).default || yahooFinance;
+      const result = await yf.quote(symbol);
+      return {
+        data: {
+          symbol: result.symbol,
+          name: result.longName || result.shortName || result.symbol,
+          price: result.regularMarketPrice ?? 0,
+          change: result.regularMarketChange ?? 0,
+          changePercent: result.regularMarketChangePercent ?? 0,
+          peRatio: result.trailingPE ?? 0,
+          eps: result.trailingEps ?? 0,
+          dividendYield: result.dividendYield ?? 0,
+          marketCap: formatMarketCap(result.marketCap),
+          fiftyTwoWeekHigh: result.fiftyTwoWeekHigh ?? 0,
+          fiftyTwoWeekLow: result.fiftyTwoWeekLow ?? 0,
+        },
+        rateLimit: getRateLimit(),
+      };
+    } catch (lastResortError) {
+      throw lastResortError;
+    }
   }
 }
