@@ -45,22 +45,19 @@ export function AiAnalysis({ details, history }: AiAnalysisProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b-2 border-primary pb-4 gap-4">
-        <div className="flex items-center gap-3">
-          <h2 className="text-lg md:text-2xl font-black tracking-tighter uppercase italic">Intelligence Core</h2>
-        </div>
-        {!analysis && !loading && (
+      {!analysis && !loading && (
+        <div className="flex justify-center py-12">
           <Button 
             onClick={handleAnalyze} 
-            className="w-full sm:w-auto bg-primary text-white font-black uppercase tracking-widest text-[9px] md:text-[10px] h-9 md:h-10 px-4 md:px-6 rounded-none hover:bg-black/90 shadow-[3px_3px_0px_black] md:shadow-[4px_4px_0px_black] active:translate-x-0.5 md:active:translate-x-1 active:translate-y-0.5 md:active:translate-y-1 active:shadow-none transition-all"
+            className="w-full sm:w-auto bg-primary text-white font-black uppercase tracking-widest text-[10px] md:text-xs h-12 md:h-14 px-8 md:px-12 rounded-none hover:bg-black/90 shadow-[4px_4px_0px_black] md:shadow-[8px_8px_0px_black] active:translate-x-1 active:translate-y-1 active:shadow-none transition-all"
           >
             Initiate Gemini Scan
           </Button>
-        )}
-      </div>
+        </div>
+      )}
 
       {loading && (
-        <div className="flex flex-col items-center justify-center py-16 md:py-20 border-2 border-dashed border-primary/20 bg-secondary/30">
+        <div className="flex flex-col items-center justify-center py-16 md:py-24 border-2 border-dashed border-primary/20 bg-secondary/30">
           <Loader2 className="w-8 h-8 md:w-10 md:h-10 animate-spin mb-4" />
           <p className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] md:tracking-[0.3em] animate-pulse text-center px-4">Processing Market Neural Pathways...</p>
         </div>
