@@ -49,7 +49,7 @@ export function AiAnalysis({ details, history }: AiAnalysisProps) {
         <div className="flex justify-center py-12">
           <Button 
             onClick={handleAnalyze} 
-            className="w-full sm:w-auto bg-primary text-white font-black uppercase tracking-widest text-[10px] md:text-xs h-12 md:h-14 px-8 md:px-12 rounded-none hover:bg-black/90 shadow-[4px_4px_0px_black] md:shadow-[8px_8px_0px_black] active:translate-x-1 active:translate-y-1 active:shadow-none transition-all"
+            className="w-full sm:w-auto bg-black/5 backdrop-blur-lg border border-black/10 text-black font-black uppercase tracking-widest text-[10px] md:text-xs h-12 md:h-14 px-8 md:px-12 rounded-full hover:bg-black/10 transition-all shadow-none"
           >
             Initiate Gemini Scan
           </Button>
