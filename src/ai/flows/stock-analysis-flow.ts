@@ -47,7 +47,7 @@ const analysisPrompt = ai.definePrompt({
 Analyze the following market data for {{{name}}} ({{{symbol}}}).
 
 CURRENT STATUS:
-- Price: \${{{price}}} ({{{changePercent}}}%)
+- Price: \u0024{{{price}}} ({{{changePercent}}}%)
 - Market Cap: {{{marketCap}}}
 - P/E Ratio: {{{peRatio}}}
 
